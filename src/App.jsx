@@ -4,10 +4,11 @@ import { Search, MapPin, Star, Plus, X, Briefcase, Building2, ArrowRight, Sparkl
 const SUPABASE_URL = "https://aacyfwqnlemndyojworc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_1m7sMwiS6GCFwSOZtqTJuQ_JrP25TGP";
 
-const CATEGORIES_GIG = ["Web Design", "Hairdressing", "Photography", "Tutoring", "Makeup Artistry", "Fashion Design", "Home Repairs", "Graphic Design", "Event Planning", "Cleaning Services"];
-const CATEGORIES_BIZ = ["Hotels & Lounges", "Food & Snacks", "Fashion", "Electronics", "Salons & Spas", "Restaurants", "Event Centers", "Auto Services"];
-const LAGOS_AREAS = ["Lekki", "Ikeja", "Yaba", "Surulere", "Ogba", "Akute", "Victoria Island", "Ajah", "Ikorodu", "Festac"];
+const CATEGORIES_GIG = ["Web Design", "Software Development", "Graphic Design", "Social Media Management", "Content Writing", "Video Editing", "Photography", "Videography", "DJ Services", "MC / Compere", "Voice Over", "Music Production", "Hairdressing", "Barbing", "Makeup Artistry", "Nail Tech", "Gele Tying", "Fashion Design", "Tailoring", "Bead Making", "Tutoring", "Home Repairs", "Plumbing", "Electrical Work", "Carpentry", "AC Repairs", "Generator Repairs", "Phone Repairs", "Computer Repairs", "Car Wash", "Driving Services", "Delivery / Logistics", "Cleaning Services", "Laundry Services", "Catering", "Cake Baking", "Event Planning", "Event Decoration", "Interior Design", "Personal Training", "Babysitting / Nanny", "Translation Services"];
+const CATEGORIES_BIZ = ["Hotels & Lounges", "Food & Snacks", "Restaurants", "Bakeries", "Fashion", "Electronics", "Salons & Spas", "Barbershops", "Event Centers", "Auto Services", "Pharmacies", "Supermarkets", "Gyms & Fitness", "Real Estate", "Furniture", "Print & Design Shops", "Laundry Services", "Logistics & Delivery"];
+const LAGOS_AREAS = ["Lekki", "Ikeja", "Yaba", "Surulere", "Ogba", "Akute", "Victoria Island", "Ajah", "Ikorodu", "Festac", "Agege", "Alimosho", "Apapa", "Badagry", "Epe", "Ibeju-Lekki", "Ikotun", "Ilupeju", "Isolo", "Ketu", "Lagos Island", "Magodo", "Maryland", "Mushin", "Ojo", "Ojota", "Oshodi", "Shomolu", "Egbeda", "Gbagada"];
 
+// ---- Minimal Supabase REST/Auth helpers (no SDK needed) ----
 async function sbFetch(path, { method = "GET", body, token, headers = {} } = {}) {
   const res = await fetch(`${SUPABASE_URL}${path}`, {
     method,
@@ -95,13 +96,14 @@ export default function Hive9ja() {
   const [mode, setMode] = useState("gig");
   const [query, setQuery] = useState("");
   const [areaFilter, setAreaFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState("All");
   const [showPostModal, setShowPostModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authTab, setAuthTab] = useState("signin");
   const [listings, setListings] = useState([]);
   const [loadingListings, setLoadingListings] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // { id, email, token, full_name }
   const [authForm, setAuthForm] = useState({ email: "", password: "", full_name: "" });
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -130,10 +132,11 @@ export default function Hive9ja() {
     return listings.filter((l) => {
       if (l.type !== mode) return false;
       if (areaFilter !== "All" && l.area !== areaFilter) return false;
+      if (categoryFilter !== "All" && l.category !== categoryFilter) return false;
       if (query && !`${l.name} ${l.title} ${l.category}`.toLowerCase().includes(query.toLowerCase())) return false;
       return true;
     });
-  }, [listings, mode, areaFilter, query]);
+  }, [listings, mode, areaFilter, categoryFilter, query]);
 
   const categories = mode === "gig" ? CATEGORIES_GIG : CATEGORIES_BIZ;
 
@@ -213,6 +216,7 @@ export default function Hive9ja() {
       `}</style>
 
       <div className="font-body max-w-6xl mx-auto px-6 py-10">
+        {/* Header */}
         <header className="flex items-center justify-between mb-14">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-amber-400 flex items-center justify-center">
@@ -242,6 +246,7 @@ export default function Hive9ja() {
           </div>
         </header>
 
+        {/* Hero */}
         <section className="mb-12">
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-emerald-300/70 mb-4">Lagos, Nigeria</p>
           <h1 className="font-display text-4xl md:text-6xl leading-[1.05] mb-4 max-w-3xl">
@@ -254,13 +259,13 @@ export default function Hive9ja() {
           <GlassCard className="p-2 max-w-2xl">
             <div className="flex gap-1 mb-2">
               <button
-                onClick={() => setMode("gig")}
+                onClick={() => { setMode("gig"); setCategoryFilter("All"); }}
                 className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-xl transition-all ${mode === "gig" ? "bg-amber-400 text-black" : "text-white/60 hover:text-white/90"}`}
               >
                 <Briefcase size={15} /> Hire a skill
               </button>
               <button
-                onClick={() => setMode("biz")}
+                onClick={() => { setMode("biz"); setCategoryFilter("All"); }}
                 className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-xl transition-all ${mode === "biz" ? "bg-emerald-400 text-black" : "text-white/60 hover:text-white/90"}`}
               >
                 <Building2 size={15} /> Find a business
@@ -277,32 +282,43 @@ export default function Hive9ja() {
             </div>
           </GlassCard>
 
-          <div className="flex flex-wrap gap-2 mt-4">
-            <button
-              onClick={() => setAreaFilter("All")}
-              className={`text-xs font-mono px-3 py-1.5 rounded-full border transition-colors ${areaFilter === "All" ? "bg-white text-black border-white" : "border-white/15 text-white/50 hover:border-white/30"}`}
-            >
-              All areas
-            </button>
-            {LAGOS_AREAS.map((a) => (
-              <button
-                key={a}
-                onClick={() => setAreaFilter(a)}
-                className={`text-xs font-mono px-3 py-1.5 rounded-full border transition-colors ${areaFilter === a ? "bg-white text-black border-white" : "border-white/15 text-white/50 hover:border-white/30"}`}
+          <div className="flex flex-wrap gap-3 mt-4">
+            <div className="relative">
+              <select
+                value={areaFilter}
+                onChange={(e) => setAreaFilter(e.target.value)}
+                className="appearance-none text-xs font-mono pl-3 pr-8 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white/70 outline-none focus:border-emerald-400/50 cursor-pointer"
               >
-                {a}
+                <option value="All" className="bg-[#0D1310]">All areas</option>
+                {LAGOS_AREAS.map((a) => (
+                  <option key={a} value={a} className="bg-[#0D1310]">{a}</option>
+                ))}
+              </select>
+              <MapPin size={12} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/30" />
+            </div>
+            <div className="relative">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="appearance-none text-xs font-mono pl-3 pr-8 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white/70 outline-none focus:border-emerald-400/50 cursor-pointer"
+              >
+                <option value="All" className="bg-[#0D1310]">All categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c} className="bg-[#0D1310]">{c}</option>
+                ))}
+              </select>
+              <Search size={12} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/30" />
+            </div>
+            {(areaFilter !== "All" || categoryFilter !== "All") && (
+              <button
+                onClick={() => { setAreaFilter("All"); setCategoryFilter("All"); }}
+                className="text-xs font-mono px-3 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 transition-colors flex items-center gap-1"
+              >
+                <X size={12} /> Clear filters
               </button>
-            ))}
+            )}
           </div>
         </section>
-
-        <div className="flex flex-wrap gap-2 mb-8">
-          {categories.map((c) => (
-            <span key={c} className="text-xs px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/40">
-              {c}
-            </span>
-          ))}
-        </div>
 
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -335,6 +351,7 @@ export default function Hive9ja() {
         </footer>
       </div>
 
+      {/* Auth modal */}
       {showAuthModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50" onClick={() => setShowAuthModal(false)}>
           <GlassCard className="w-full max-w-md p-6 bg-[#0D1310]/95" onClick={(e) => e.stopPropagation()}>
@@ -385,6 +402,7 @@ export default function Hive9ja() {
         </div>
       )}
 
+      {/* Post listing modal */}
       {showPostModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50" onClick={() => setShowPostModal(false)}>
           <GlassCard className="w-full max-w-md p-6 bg-[#0D1310]/95" onClick={(e) => e.stopPropagation()}>
