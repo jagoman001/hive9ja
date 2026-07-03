@@ -8,7 +8,6 @@ const CATEGORIES_GIG = ["Web Design", "Hairdressing", "Photography", "Tutoring",
 const CATEGORIES_BIZ = ["Hotels & Lounges", "Food & Snacks", "Fashion", "Electronics", "Salons & Spas", "Restaurants", "Event Centers", "Auto Services"];
 const LAGOS_AREAS = ["Lekki", "Ikeja", "Yaba", "Surulere", "Ogba", "Akute", "Victoria Island", "Ajah", "Ikorodu", "Festac"];
 
-// ---- Minimal Supabase REST/Auth helpers (no SDK needed) ----
 async function sbFetch(path, { method = "GET", body, token, headers = {} } = {}) {
   const res = await fetch(`${SUPABASE_URL}${path}`, {
     method,
@@ -75,9 +74,18 @@ function ListingCard({ listing }) {
       </div>
       <div className="flex items-center justify-between pt-3 border-t border-white/[0.07]">
         <span className="font-mono text-emerald-300 text-sm">{listing.rate || "Contact for price"}<span className="text-white/30">{listing.rate_unit || ""}</span></span>
-        <button className="text-xs text-white/70 group-hover:text-amber-300 flex items-center gap-1 transition-colors">
-          View <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-        </button>
+        {listing.whatsapp ? (
+          <a
+            href={`https://wa.me/${listing.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(`Hi ${listing.name}, I saw your listing on Hive9ja for "${listing.title}" and I'm interested.`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-white/70 group-hover:text-amber-300 flex items-center gap-1 transition-colors"
+          >
+            Contact <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+          </a>
+        ) : (
+          <span className="text-xs text-white/30">No contact info</span>
+        )}
       </div>
     </GlassCard>
   );
@@ -93,11 +101,11 @@ export default function Hive9ja() {
   const [listings, setListings] = useState([]);
   const [loadingListings, setLoadingListings] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [user, setUser] = useState(null); // { id, email, token, full_name }
+  const [user, setUser] = useState(null);
   const [authForm, setAuthForm] = useState({ email: "", password: "", full_name: "" });
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [postForm, setPostForm] = useState({ name: "", title: "", category: "", area: "Lekki", rate: "" });
+  const [postForm, setPostForm] = useState({ name: "", title: "", category: "", area: "Lekki", rate: "", whatsapp: "" });
   const [postBusy, setPostBusy] = useState(false);
   const [postError, setPostError] = useState("");
 
@@ -181,11 +189,12 @@ export default function Hive9ja() {
           category: postForm.category,
           area: postForm.area,
           rate: postForm.rate || null,
+          whatsapp: postForm.whatsapp || null,
         },
         user.token
       );
       setListings([created, ...listings]);
-      setPostForm({ name: "", title: "", category: "", area: "Lekki", rate: "" });
+      setPostForm({ name: "", title: "", category: "", area: "Lekki", rate: "", whatsapp: "" });
       setShowPostModal(false);
     } catch (err) {
       setPostError(err.message || "Couldn't post listing");
@@ -204,7 +213,6 @@ export default function Hive9ja() {
       `}</style>
 
       <div className="font-body max-w-6xl mx-auto px-6 py-10">
-        {/* Header */}
         <header className="flex items-center justify-between mb-14">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-amber-400 flex items-center justify-center">
@@ -234,7 +242,6 @@ export default function Hive9ja() {
           </div>
         </header>
 
-        {/* Hero */}
         <section className="mb-12">
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-emerald-300/70 mb-4">Lagos, Nigeria</p>
           <h1 className="font-display text-4xl md:text-6xl leading-[1.05] mb-4 max-w-3xl">
@@ -328,7 +335,6 @@ export default function Hive9ja() {
         </footer>
       </div>
 
-      {/* Auth modal */}
       {showAuthModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50" onClick={() => setShowAuthModal(false)}>
           <GlassCard className="w-full max-w-md p-6 bg-[#0D1310]/95" onClick={(e) => e.stopPropagation()}>
@@ -379,7 +385,6 @@ export default function Hive9ja() {
         </div>
       )}
 
-      {/* Post listing modal */}
       {showPostModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50" onClick={() => setShowPostModal(false)}>
           <GlassCard className="w-full max-w-md p-6 bg-[#0D1310]/95" onClick={(e) => e.stopPropagation()}>
@@ -432,6 +437,13 @@ export default function Hive9ja() {
                   className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-400/50"
                 />
               </div>
+              <input
+                placeholder="WhatsApp number (e.g. 2348012345678)"
+                value={postForm.whatsapp}
+                onChange={(e) => setPostForm({ ...postForm, whatsapp: e.target.value })}
+                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-400/50"
+              />
+              <p className="text-[11px] text-white/30 -mt-1">Country code + number, no + or spaces. This is how people reach you.</p>
               {postError && <p className="text-xs text-amber-300">{postError}</p>}
               <button type="submit" disabled={postBusy} className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-black font-medium text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
                 {postBusy && <Loader2 size={14} className="animate-spin" />}
