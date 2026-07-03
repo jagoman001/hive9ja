@@ -57,6 +57,9 @@ const deleteListing = (id, token) =>
 const recoverPassword = (email) =>
   sbFetch("/auth/v1/recover", { method: "POST", body: { email } });
 
+const updatePassword = (newPassword, token) =>
+  sbFetch("/auth/v1/user", { method: "PUT", body: { password: newPassword }, token });
+
 const submitReport = (listing_id, reporter_id, reason, token) =>
   sbFetch("/rest/v1/reports", { method: "POST", body: { listing_id, reporter_id, reason }, token });
 
@@ -217,6 +220,23 @@ export default function Hive9ja() {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+  const [recoveryToken, setRecoveryToken] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordBusy, setNewPasswordBusy] = useState(false);
+  const [newPasswordError, setNewPasswordError] = useState("");
+  const [newPasswordDone, setNewPasswordDone] = useState(false);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=recovery")) {
+      const params = new URLSearchParams(hash.slice(1));
+      const token = params.get("access_token");
+      if (token) {
+        setRecoveryToken(token);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+  }, []);
 
   const loadListings = useCallback(async () => {
     setLoadingListings(true);
@@ -302,6 +322,22 @@ export default function Hive9ja() {
 
   function handleSignOut() {
     setUser(null);
+  }
+
+  async function handleSetNewPassword(e) {
+    e.preventDefault();
+    setNewPasswordBusy(true);
+    setNewPasswordError("");
+    try {
+      await updatePassword(newPassword, recoveryToken);
+      const data = await sbFetch("/auth/v1/user", { token: recoveryToken });
+      setUser({ id: data.id, email: data.email, token: recoveryToken, full_name: data.user_metadata?.full_name || data.email });
+      setNewPasswordDone(true);
+    } catch (err) {
+      setNewPasswordError(err.message || "Couldn't update password");
+    } finally {
+      setNewPasswordBusy(false);
+    }
   }
 
   async function handlePost(e) {
@@ -578,6 +614,42 @@ export default function Hive9ja() {
           Hive9ja — connected to live database · QD Designs
         </footer>
       </div>
+
+      {/* Set new password modal - shown after clicking the email reset link */}
+      {recoveryToken && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <GlassCard className="w-full max-w-md p-6 bg-[#0D1310]/95">
+            <h3 className="font-display text-xl mb-5">Set a new password</h3>
+            {newPasswordDone ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-white/70 mb-4">Password updated. You're signed in.</p>
+                <button
+                  onClick={() => { setRecoveryToken(null); setNewPasswordDone(false); setNewPassword(""); }}
+                  className="text-xs text-emerald-300 hover:text-emerald-200"
+                >
+                  Continue to Hive9ja
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSetNewPassword} className="space-y-3">
+                <input
+                  type="password"
+                  placeholder="New password (min 6 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-400/50"
+                  minLength={6}
+                  required
+                />
+                {newPasswordError && <p className="text-xs text-amber-300">{newPasswordError}</p>}
+                <button type="submit" disabled={newPasswordBusy} className="w-full bg-emerald-400 hover:bg-emerald-300 disabled:opacity-60 text-black font-medium text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                  {newPasswordBusy && <Loader2 size={14} className="animate-spin" />} Update password
+                </button>
+              </form>
+            )}
+          </GlassCard>
+        </div>
+      )}
 
       {/* Auth modal */}
       {showAuthModal && (
