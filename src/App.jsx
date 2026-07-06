@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Search, MapPin, Star, Plus, X, Briefcase, Building2, ArrowRight, Sparkles, LogOut, Loader2, Image, Pencil, Trash2, Flag, Camera, User } from "lucide-react";
+import { Search, MapPin, Star, Plus, X, Briefcase, Building2, ArrowRight, Sparkles, LogOut, Loader2, Image, Pencil, Trash2, Flag, Camera, User, Heart, Share2, ShieldCheck } from "lucide-react";
 
 const SUPABASE_URL = "https://aacyfwqnlemndyojworc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_1m7sMwiS6GCFwSOZtqTJuQ_JrP25TGP";
+const ADMIN_EMAIL = "quadri4adeshina@icloud.com";
 
 const CATEGORIES_GIG = ["Web Design", "Software Development", "Graphic Design", "Social Media Management", "Content Writing", "Video Editing", "Photography", "Videography", "DJ Services", "MC / Compere", "Voice Over", "Music Production", "Hairdressing", "Barbing", "Makeup Artistry", "Nail Tech", "Gele Tying", "Fashion Design", "Tailoring", "Bead Making", "Tutoring", "Home Repairs", "Plumbing", "Electrical Work", "Carpentry", "AC Repairs", "Generator Repairs", "Phone Repairs", "Computer Repairs", "Car Wash", "Driving Services", "Delivery / Logistics", "Cleaning Services", "Laundry Services", "Catering", "Cake Baking", "Event Planning", "Event Decoration", "Interior Design", "Personal Training", "Babysitting / Nanny", "Translation Services"];
 const CATEGORIES_BIZ = ["Hotels & Lounges", "Food & Snacks", "Restaurants", "Bakeries", "Fashion", "Electronics", "Salons & Spas", "Barbershops", "Event Centers", "Auto Services", "Pharmacies", "Supermarkets", "Gyms & Fitness", "Real Estate", "Furniture", "Print & Design Shops", "Laundry Services", "Logistics & Delivery"];
@@ -76,7 +77,7 @@ const submitReview = (listing_id, reviewer_id, rating, comment, token) =>
 
 async function uploadPhoto(file, userId, token) {
   const ext = file.name.split(".").pop();
-  const path = `${userId}/${Date.now()}.${ext}`;
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/photos/${path}`, {
     method: "POST",
     headers: {
@@ -90,6 +91,30 @@ async function uploadPhoto(file, userId, token) {
   return `${SUPABASE_URL}/storage/v1/object/public/photos/${path}`;
 }
 
+const fetchFavorites = (userId, token) =>
+  sbFetch(`/rest/v1/favorites?user_id=eq.${userId}&select=listing_id`, { token });
+
+const addFavorite = (listing_id, user_id, token) =>
+  sbFetch("/rest/v1/favorites", { method: "POST", body: { listing_id, user_id }, token });
+
+const removeFavorite = (listing_id, user_id, token) =>
+  sbFetch(`/rest/v1/favorites?listing_id=eq.${listing_id}&user_id=eq.${user_id}`, { method: "DELETE", token });
+
+function timeAgo(dateString) {
+  if (!dateString) return "";
+  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
 function GlassCard({ children, className = "", ...props }) {
   return (
     <div className={`backdrop-blur-xl bg-white/[0.06] border border-white/[0.09] rounded-2xl ${className}`} {...props}>
@@ -98,13 +123,31 @@ function GlassCard({ children, className = "", ...props }) {
   );
 }
 
-function ListingCard({ listing, currentUserId, onEdit, onDelete, onReport, onReview, avgRating, reviewCount }) {
+function ListingCard({ listing, currentUserId, isAdmin, isFavorited, onEdit, onDelete, onReport, onReview, onToggleFavorite, onToggleVerified, avgRating, reviewCount }) {
   const isGig = listing.type === "gig";
   const isOwner = currentUserId && listing.owner_id === currentUserId;
+  const canManage = isOwner || isAdmin;
+  const photos = listing.photos && listing.photos.length ? listing.photos : listing.cover_photo_url ? [listing.cover_photo_url] : [];
+
+  function handleShare() {
+    const url = window.location.origin;
+    const text = `Check out ${listing.name} (${listing.title}) on Hive9ja — ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  }
+
   return (
     <GlassCard className="overflow-hidden hover:bg-white/[0.09] transition-colors duration-300 group">
-      {listing.cover_photo_url ? (
-        <img src={listing.cover_photo_url} alt={listing.name} className="w-full h-36 object-cover" />
+      {photos.length ? (
+        <div className="relative">
+          <img src={photos[0]} alt={listing.name} className="w-full h-36 object-cover" />
+          {photos.length > 1 && (
+            <div className="absolute bottom-1.5 right-1.5 flex gap-1">
+              {photos.slice(1, 4).map((p, i) => (
+                <img key={i} src={p} alt="" className="w-8 h-8 rounded object-cover border border-white/30" />
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <div className={`w-full h-36 flex items-center justify-center ${isGig ? "bg-amber-400/10" : "bg-emerald-400/10"}`}>
           {isGig ? <Briefcase size={28} className="text-white/15" /> : <Building2 size={28} className="text-white/15" />}
@@ -116,7 +159,7 @@ function ListingCard({ listing, currentUserId, onEdit, onDelete, onReport, onRev
             {isGig ? <Briefcase size={18} /> : <Building2 size={18} />}
           </div>
           <div className="flex items-center gap-1.5">
-            {isOwner && (
+            {canManage && (
               <>
                 <button onClick={() => onEdit(listing)} className="text-white/30 hover:text-amber-300 transition-colors" title="Edit">
                   <Pencil size={13} />
@@ -125,6 +168,15 @@ function ListingCard({ listing, currentUserId, onEdit, onDelete, onReport, onRev
                   <Trash2 size={13} />
                 </button>
               </>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => onToggleVerified(listing)}
+                className={listing.verified ? "text-emerald-300" : "text-white/30 hover:text-emerald-300"}
+                title={listing.verified ? "Remove verified" : "Mark verified"}
+              >
+                <ShieldCheck size={14} />
+              </button>
             )}
             {listing.verified ? (
               <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">Verified</span>
@@ -141,6 +193,9 @@ function ListingCard({ listing, currentUserId, onEdit, onDelete, onReport, onRev
           <span className="mx-1.5 opacity-30">•</span>
           <span className="font-mono">{listing.category}</span>
         </div>
+        {listing.updated_at && (
+          <p className="text-[10px] text-white/25 mb-2">Updated {timeAgo(listing.updated_at)}</p>
+        )}
         <div className="flex items-center gap-2 mb-3">
           {reviewCount > 0 ? (
             <button onClick={() => onReview(listing)} className="flex items-center gap-1 text-xs text-amber-300/90 hover:text-amber-300">
@@ -165,6 +220,12 @@ function ListingCard({ listing, currentUserId, onEdit, onDelete, onReport, onRev
         <div className="flex items-center justify-between pt-3 border-t border-white/[0.07]">
           <span className="font-mono text-emerald-300 text-sm">{listing.rate || "Contact for price"}<span className="text-white/30">{listing.rate_unit || ""}</span></span>
           <div className="flex items-center gap-3">
+            <button onClick={() => onToggleFavorite(listing)} title="Save">
+              <Heart size={13} className={isFavorited ? "fill-red-400 text-red-400" : "text-white/25 hover:text-red-400"} />
+            </button>
+            <button onClick={handleShare} className="text-white/25 hover:text-emerald-300 transition-colors" title="Share">
+              <Share2 size={13} />
+            </button>
             {!isOwner && (
               <button onClick={() => onReport(listing)} className="text-white/25 hover:text-red-400 transition-colors" title="Report">
                 <Flag size={12} />
@@ -208,8 +269,10 @@ export default function Hive9ja() {
   const [postBusy, setPostBusy] = useState(false);
   const [postError, setPostError] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [coverFile, setCoverFile] = useState(null);
   const [myListingsOnly, setMyListingsOnly] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [favorites, setFavorites] = useState([]);
+  const [coverFiles, setCoverFiles] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [reportTarget, setReportTarget] = useState(null);
   const [reportReason, setReportReason] = useState("");
@@ -256,16 +319,29 @@ export default function Hive9ja() {
     loadListings();
   }, [loadListings]);
 
+  useEffect(() => {
+    if (!user) {
+      setFavorites([]);
+      return;
+    }
+    fetchFavorites(user.id, user.token)
+      .then((data) => setFavorites((data || []).map((f) => f.listing_id)))
+      .catch(() => setFavorites([]));
+  }, [user]);
+
   const filtered = useMemo(() => {
     return listings.filter((l) => {
       if (l.type !== mode) return false;
       if (myListingsOnly && l.owner_id !== user?.id) return false;
+      if (favoritesOnly && !favorites.includes(l.id)) return false;
       if (areaFilter !== "All" && l.area !== areaFilter) return false;
       if (categoryFilter !== "All" && l.category !== categoryFilter) return false;
       if (query && !`${l.name} ${l.title} ${l.category}`.toLowerCase().includes(query.toLowerCase())) return false;
       return true;
     });
-  }, [listings, mode, areaFilter, categoryFilter, query, myListingsOnly, user]);
+  }, [listings, mode, areaFilter, categoryFilter, query, myListingsOnly, favoritesOnly, favorites, user]);
+
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
   const ratingStats = useMemo(() => {
     const stats = {};
@@ -351,9 +427,9 @@ export default function Hive9ja() {
     setPostBusy(true);
     setPostError("");
     try {
-      let cover_photo_url;
-      if (coverFile) {
-        cover_photo_url = await uploadPhoto(coverFile, user.id, user.token);
+      let photos;
+      if (coverFiles.length) {
+        photos = await Promise.all(coverFiles.map((f) => uploadPhoto(f, user.id, user.token)));
       }
       const payload = {
         type: mode,
@@ -364,7 +440,7 @@ export default function Hive9ja() {
         rate: postForm.rate || null,
         whatsapp: postForm.whatsapp || null,
         portfolio_link: postForm.portfolio_link || null,
-        ...(cover_photo_url ? { cover_photo_url } : {}),
+        ...(photos ? { photos, cover_photo_url: photos[0] } : {}),
       };
       if (editingId) {
         const [updated] = await updateListing(editingId, payload, user.token);
@@ -374,13 +450,41 @@ export default function Hive9ja() {
         setListings([created, ...listings]);
       }
       setPostForm({ name: "", title: "", category: "", area: "Lekki", rate: "", whatsapp: "", portfolio_link: "" });
-      setCoverFile(null);
+      setCoverFiles([]);
       setEditingId(null);
       setShowPostModal(false);
     } catch (err) {
       setPostError(err.message || "Couldn't save listing");
     } finally {
       setPostBusy(false);
+    }
+  }
+
+  async function handleToggleFavorite(listing) {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    try {
+      if (favorites.includes(listing.id)) {
+        await removeFavorite(listing.id, user.id, user.token);
+        setFavorites(favorites.filter((id) => id !== listing.id));
+      } else {
+        await addFavorite(listing.id, user.id, user.token);
+        setFavorites([...favorites, listing.id]);
+      }
+    } catch (err) {
+      alert(err.message || "Couldn't update favorites");
+    }
+  }
+
+  async function handleToggleVerified(listing) {
+    if (!user) return;
+    try {
+      const [updated] = await updateListing(listing.id, { verified: !listing.verified }, user.token);
+      setListings(listings.map((l) => (l.id === listing.id ? updated : l)));
+    } catch (err) {
+      alert(err.message || "Couldn't update verified status");
     }
   }
 
@@ -471,6 +575,17 @@ export default function Hive9ja() {
           <div className="flex items-center gap-3">
             {user ? (
               <>
+                {isAdmin && (
+                  <span className="hidden sm:flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/25">
+                    <ShieldCheck size={11} /> Admin
+                  </span>
+                )}
+                <button
+                  onClick={() => setFavoritesOnly(!favoritesOnly)}
+                  className={`hidden sm:flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${favoritesOnly ? "bg-red-400 text-black border-red-400" : "border-white/15 text-white/50 hover:border-white/30"}`}
+                >
+                  <Heart size={12} /> Favorites
+                </button>
                 <button
                   onClick={() => setMyListingsOnly(!myListingsOnly)}
                   className={`hidden sm:flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${myListingsOnly ? "bg-amber-400 text-black border-amber-400" : "border-white/15 text-white/50 hover:border-white/30"}`}
@@ -598,10 +713,14 @@ export default function Hive9ja() {
                   key={l.id}
                   listing={l}
                   currentUserId={user?.id}
+                  isAdmin={isAdmin}
+                  isFavorited={favorites.includes(l.id)}
                   onEdit={openEdit}
                   onDelete={handleDelete}
                   onReport={(listing) => (user ? setReportTarget(listing) : setShowAuthModal(true))}
                   onReview={(listing) => (user ? setReviewTarget(listing) : setShowAuthModal(true))}
+                  onToggleFavorite={handleToggleFavorite}
+                  onToggleVerified={handleToggleVerified}
                   avgRating={ratingStats[l.id] ? ratingStats[l.id].sum / ratingStats[l.id].count : 0}
                   reviewCount={ratingStats[l.id]?.count || 0}
                 />
@@ -740,11 +859,11 @@ export default function Hive9ja() {
 
       {/* Post listing modal */}
       {showPostModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50" onClick={() => { setShowPostModal(false); setEditingId(null); setCoverFile(null); }}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50" onClick={() => { setShowPostModal(false); setEditingId(null); setCoverFiles([]); }}>
           <GlassCard className="w-full max-w-md p-6 bg-[#0D1310]/95 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-display text-xl">{editingId ? "Edit listing" : "List on Hive9ja"}</h3>
-              <button onClick={() => { setShowPostModal(false); setEditingId(null); setCoverFile(null); }} className="text-white/40 hover:text-white">
+              <button onClick={() => { setShowPostModal(false); setEditingId(null); setCoverFiles([]); }} className="text-white/40 hover:text-white">
                 <X size={20} />
               </button>
             </div>
@@ -755,8 +874,14 @@ export default function Hive9ja() {
             <form onSubmit={handlePost} className="space-y-3">
               <label className="flex items-center gap-2 text-xs text-white/50 border border-dashed border-white/15 rounded-lg px-3 py-2.5 cursor-pointer hover:border-white/30">
                 <Camera size={14} />
-                {coverFile ? coverFile.name : "Add a cover photo (optional but recommended)"}
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} />
+                {coverFiles.length ? `${coverFiles.length} photo${coverFiles.length > 1 ? "s" : ""} selected` : "Add up to 4 photos (optional but recommended)"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => setCoverFiles(Array.from(e.target.files || []).slice(0, 4))}
+                />
               </label>
               <input
                 placeholder={mode === "gig" ? "Your name" : "Business name"}
