@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { Search, MapPin, Star, Plus, X, Briefcase, Building2, ArrowRight, Sparkles, LogOut, Loader2, Image, Pencil, Trash2, Flag, Camera, User, Heart, Share2, ShieldCheck } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { Search, MapPin, Star, Plus, X, Briefcase, Building2, ArrowRight, Sparkles, LogOut, Loader2, Image, Pencil, Trash2, Flag, Camera, User, Heart, Share2, ShieldCheck, Navigation, Eye } from "lucide-react";
 
 const SUPABASE_URL = "https://aacyfwqnlemndyojworc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_1m7sMwiS6GCFwSOZtqTJuQ_JrP25TGP";
@@ -8,6 +8,27 @@ const ADMIN_EMAIL = "quadri4adeshina@icloud.com";
 const CATEGORIES_GIG = ["Web Design", "Software Development", "Graphic Design", "Social Media Management", "Content Writing", "Video Editing", "Photography", "Videography", "DJ Services", "MC / Compere", "Voice Over", "Music Production", "Hairdressing", "Barbing", "Makeup Artistry", "Nail Tech", "Gele Tying", "Fashion Design", "Tailoring", "Bead Making", "Tutoring", "Home Repairs", "Plumbing", "Electrical Work", "Carpentry", "AC Repairs", "Generator Repairs", "Phone Repairs", "Computer Repairs", "Car Wash", "Driving Services", "Delivery / Logistics", "Cleaning Services", "Laundry Services", "Catering", "Cake Baking", "Event Planning", "Event Decoration", "Interior Design", "Personal Training", "Babysitting / Nanny", "Translation Services"];
 const CATEGORIES_BIZ = ["Hotels & Lounges", "Food & Snacks", "Restaurants", "Bakeries", "Fashion", "Electronics", "Salons & Spas", "Barbershops", "Event Centers", "Auto Services", "Pharmacies", "Supermarkets", "Gyms & Fitness", "Real Estate", "Furniture", "Print & Design Shops", "Laundry Services", "Logistics & Delivery"];
 const LAGOS_AREAS = ["Lekki", "Ikeja", "Yaba", "Surulere", "Ogba", "Akute", "Victoria Island", "Ajah", "Ikorodu", "Festac", "Agege", "Alimosho", "Apapa", "Badagry", "Epe", "Ibeju-Lekki", "Ikotun", "Ilupeju", "Isolo", "Ketu", "Lagos Island", "Magodo", "Maryland", "Mushin", "Ojo", "Ojota", "Oshodi", "Shomolu", "Egbeda", "Gbagada"];
+
+const LAGOS_AREA_COORDS = {
+  "Lekki": [6.4698, 3.5852], "Ikeja": [6.6018, 3.3515], "Yaba": [6.5158, 3.3707],
+  "Surulere": [6.4926, 3.3541], "Ogba": [6.6280, 3.3400], "Akute": [6.6800, 3.2900],
+  "Victoria Island": [6.4281, 3.4219], "Ajah": [6.4667, 3.5667], "Ikorodu": [6.6194, 3.5105],
+  "Festac": [6.4667, 3.2833], "Agege": [6.6154, 3.3258], "Alimosho": [6.6000, 3.2500],
+  "Apapa": [6.4500, 3.3667], "Badagry": [6.4149, 2.8880], "Epe": [6.5833, 3.9833],
+  "Ibeju-Lekki": [6.4500, 3.9000], "Ikotun": [6.5500, 3.2667], "Ilupeju": [6.5500, 3.3667],
+  "Isolo": [6.5333, 3.3333], "Ketu": [6.5833, 3.3833], "Lagos Island": [6.4550, 3.3947],
+  "Magodo": [6.6167, 3.3833], "Maryland": [6.5667, 3.3667], "Mushin": [6.5333, 3.3500],
+  "Ojo": [6.4614, 3.1811], "Ojota": [6.5667, 3.3833], "Oshodi": [6.5500, 3.3167],
+  "Shomolu": [6.5333, 3.3833], "Egbeda": [6.5833, 3.2833], "Gbagada": [6.5500, 3.3833],
+};
+
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // ---- Minimal Supabase REST/Auth helpers (no SDK needed) ----
 async function sbFetch(path, { method = "GET", body, token, headers = {} } = {}) {
@@ -100,6 +121,12 @@ const addFavorite = (listing_id, user_id, token) =>
 const removeFavorite = (listing_id, user_id, token) =>
   sbFetch(`/rest/v1/favorites?listing_id=eq.${listing_id}&user_id=eq.${user_id}`, { method: "DELETE", token });
 
+const fetchViews = (sinceIso) =>
+  sbFetch(`/rest/v1/listing_views?select=listing_id&viewed_at=gte.${sinceIso}`);
+
+const logView = (listing_id) =>
+  sbFetch("/rest/v1/listing_views", { method: "POST", body: { listing_id } });
+
 function timeAgo(dateString) {
   if (!dateString) return "";
   const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
@@ -123,7 +150,7 @@ function GlassCard({ children, className = "", ...props }) {
   );
 }
 
-function ListingCard({ listing, currentUserId, isAdmin, isFavorited, onEdit, onDelete, onReport, onReview, onToggleFavorite, onToggleVerified, avgRating, reviewCount }) {
+function ListingCard({ listing, currentUserId, isAdmin, isFavorited, onEdit, onDelete, onReport, onReview, onToggleFavorite, onToggleVerified, avgRating, reviewCount, distanceKm: distance, viewCount }) {
   const isGig = listing.type === "gig";
   const isOwner = currentUserId && listing.owner_id === currentUserId;
   const canManage = isOwner || isAdmin;
@@ -139,7 +166,7 @@ function ListingCard({ listing, currentUserId, isAdmin, isFavorited, onEdit, onD
     <GlassCard className="overflow-hidden hover:bg-white/[0.09] transition-colors duration-300 group">
       {photos.length ? (
         <div className="relative">
-          <img src={photos[0]} alt={listing.name} className="w-full h-56 object-cover object-top" />
+          <img src={photos[0]} alt={listing.name} className="w-full h-36 object-cover" />
           {photos.length > 1 && (
             <div className="absolute bottom-1.5 right-1.5 flex gap-1">
               {photos.slice(1, 4).map((p, i) => (
@@ -190,11 +217,24 @@ function ListingCard({ listing, currentUserId, isAdmin, isFavorited, onEdit, onD
         <div className="flex items-center gap-1 text-white/40 text-xs mb-2">
           <MapPin size={12} />
           <span>{listing.area}, Lagos</span>
+          {distance !== undefined && distance !== null && isFinite(distance) && (
+            <>
+              <span className="mx-1 opacity-30">•</span>
+              <span className="text-emerald-300/80">{distance < 1 ? `${Math.round(distance * 1000)}m away` : `${distance.toFixed(1)}km away`}</span>
+            </>
+          )}
           <span className="mx-1.5 opacity-30">•</span>
           <span className="font-mono">{listing.category}</span>
         </div>
         {listing.updated_at && (
-          <p className="text-[10px] text-white/25 mb-2">Updated {timeAgo(listing.updated_at)}</p>
+          <p className="text-[10px] text-white/25 mb-2">
+            Updated {timeAgo(listing.updated_at)}
+            {(currentUserId === listing.owner_id || isAdmin) && (
+              <span className="ml-2 inline-flex items-center gap-1 text-white/30">
+                <Eye size={10} /> {viewCount || 0} views this week
+              </span>
+            )}
+          </p>
         )}
         <div className="flex items-center gap-2 mb-3">
           {reviewCount > 0 ? (
@@ -273,6 +313,11 @@ export default function Hive9ja() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState([]);
   const [coverFiles, setCoverFiles] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
+  const [nearMeActive, setNearMeActive] = useState(false);
+  const [nearMeError, setNearMeError] = useState("");
+  const [views, setViews] = useState([]);
+  const loggedViewsRef = useRef(new Set());
   const [reviews, setReviews] = useState([]);
   const [reportTarget, setReportTarget] = useState(null);
   const [reportReason, setReportReason] = useState("");
@@ -305,9 +350,15 @@ export default function Hive9ja() {
     setLoadingListings(true);
     setLoadError("");
     try {
-      const [data, reviewData] = await Promise.all([fetchListings(), fetchReviews().catch(() => [])]);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const [data, reviewData, viewData] = await Promise.all([
+        fetchListings(),
+        fetchReviews().catch(() => []),
+        fetchViews(sevenDaysAgo).catch(() => []),
+      ]);
       setListings(data || []);
       setReviews(reviewData || []);
+      setViews(viewData || []);
     } catch (e) {
       setLoadError("Couldn't load listings. Check your Supabase connection.");
     } finally {
@@ -330,7 +381,7 @@ export default function Hive9ja() {
   }, [user]);
 
   const filtered = useMemo(() => {
-    return listings.filter((l) => {
+    let result = listings.filter((l) => {
       if (l.type !== mode) return false;
       if (myListingsOnly && l.owner_id !== user?.id) return false;
       if (favoritesOnly && !favorites.includes(l.id)) return false;
@@ -339,9 +390,56 @@ export default function Hive9ja() {
       if (query && !`${l.name} ${l.title} ${l.category}`.toLowerCase().includes(query.toLowerCase())) return false;
       return true;
     });
-  }, [listings, mode, areaFilter, categoryFilter, query, myListingsOnly, favoritesOnly, favorites, user]);
+    if (nearMeActive && userLocation) {
+      result = [...result].sort((a, b) => {
+        const coordA = LAGOS_AREA_COORDS[a.area];
+        const coordB = LAGOS_AREA_COORDS[b.area];
+        const distA = coordA ? distanceKm(userLocation.lat, userLocation.lng, coordA[0], coordA[1]) : Infinity;
+        const distB = coordB ? distanceKm(userLocation.lat, userLocation.lng, coordB[0], coordB[1]) : Infinity;
+        return distA - distB;
+      });
+    }
+    return result;
+  }, [listings, mode, areaFilter, categoryFilter, query, myListingsOnly, favoritesOnly, favorites, user, nearMeActive, userLocation]);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
+
+  const viewStats = useMemo(() => {
+    const stats = {};
+    views.forEach((v) => {
+      stats[v.listing_id] = (stats[v.listing_id] || 0) + 1;
+    });
+    return stats;
+  }, [views]);
+
+  useEffect(() => {
+    filtered.forEach((l) => {
+      if (!loggedViewsRef.current.has(l.id)) {
+        loggedViewsRef.current.add(l.id);
+        logView(l.id).catch(() => {});
+      }
+    });
+  }, [filtered]);
+
+  function handleNearMe() {
+    if (nearMeActive) {
+      setNearMeActive(false);
+      return;
+    }
+    setNearMeError("");
+    if (!navigator.geolocation) {
+      setNearMeError("Location isn't supported on this device.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setNearMeActive(true);
+      },
+      () => setNearMeError("Couldn't get your location. Check location permissions."),
+      { timeout: 10000 }
+    );
+  }
 
   const ratingStats = useMemo(() => {
     const stats = {};
@@ -674,15 +772,22 @@ export default function Hive9ja() {
               </select>
               <Search size={12} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/30" />
             </div>
-            {(areaFilter !== "All" || categoryFilter !== "All") && (
+            {(areaFilter !== "All" || categoryFilter !== "All" || nearMeActive) && (
               <button
-                onClick={() => { setAreaFilter("All"); setCategoryFilter("All"); }}
+                onClick={() => { setAreaFilter("All"); setCategoryFilter("All"); setNearMeActive(false); }}
                 className="text-xs font-mono px-3 py-2 rounded-full border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 transition-colors flex items-center gap-1"
               >
                 <X size={12} /> Clear filters
               </button>
             )}
+            <button
+              onClick={handleNearMe}
+              className={`text-xs font-mono px-3 py-2 rounded-full border transition-colors flex items-center gap-1 ${nearMeActive ? "bg-emerald-400 text-black border-emerald-400" : "border-white/15 text-white/50 hover:border-white/30"}`}
+            >
+              <Navigation size={12} /> {nearMeActive ? "Near me: on" : "Near me"}
+            </button>
           </div>
+          {nearMeError && <p className="text-xs text-red-300/80 mt-2">{nearMeError}</p>}
         </section>
 
         <section>
@@ -723,6 +828,12 @@ export default function Hive9ja() {
                   onToggleVerified={handleToggleVerified}
                   avgRating={ratingStats[l.id] ? ratingStats[l.id].sum / ratingStats[l.id].count : 0}
                   reviewCount={ratingStats[l.id]?.count || 0}
+                  viewCount={viewStats[l.id] || 0}
+                  distanceKm={
+                    nearMeActive && userLocation && LAGOS_AREA_COORDS[l.area]
+                      ? distanceKm(userLocation.lat, userLocation.lng, LAGOS_AREA_COORDS[l.area][0], LAGOS_AREA_COORDS[l.area][1])
+                      : null
+                  }
                 />
               ))}
             </div>
