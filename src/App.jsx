@@ -166,7 +166,7 @@ function ListingCard({ listing, currentUserId, isAdmin, isFavorited, onEdit, onD
     <GlassCard className="overflow-hidden hover:bg-white/[0.09] transition-colors duration-300 group">
       {photos.length ? (
         <div className="relative">
-          <img src={photos[0]} alt={listing.name} className="w-full h-56 object-cover" />
+          <img src={photos[0]} alt={listing.name} className="w-full h-56 object-cover object-top" />
           {photos.length > 1 && (
             <div className="absolute bottom-1.5 right-1.5 flex gap-1">
               {photos.slice(1, 4).map((p, i) => (
