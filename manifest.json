@@ -1,0 +1,18 @@
+{
+  "name": "Hive9ja — Find hustle. Find hustlers.",
+  "short_name": "Hive9ja",
+  "description": "Lagos and Ogun's marketplace for hiring skilled youth, finding jobs, and discovering trusted local businesses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0E0C",
+  "theme_color": "#0B3D2E",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
